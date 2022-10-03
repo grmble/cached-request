@@ -1,9 +1,13 @@
 (ns grmble.cached-request.config
   "Ehcache configuration"
   (:import
+   [clojure.lang IPersistentMap]
+   [java.time Duration]
    [org.ehcache.config.units EntryUnit MemoryUnit]
-   [org.ehcache.config.builders CacheConfigurationBuilder CacheManagerBuilder ResourcePoolsBuilder])
+   [org.ehcache.config.builders CacheConfigurationBuilder CacheManagerBuilder
+    ExpiryPolicyBuilder ResourcePoolsBuilder])
   (:require
+   [grmble.cached-request.serializer :as s]
    [malli.core :as m]
    [malli.error :as me]))
 
@@ -22,7 +26,8 @@
     [:map {:closed true}
      [:size SizeSchema]
      [:filename [:string {:min 1}]]]]
-   [:ttl {:optional true} DurationSchema]])
+   [:ttl {:optional true} DurationSchema]
+   [:keys {:optional true} [:enum :keyword :string]]])
 
 (defn explain
   "Explain errors for a cache configuration
@@ -49,6 +54,17 @@
     (let [[n unit] sz]
       (* n (size-factors unit)))
     sz))
+
+(def ^{:private true} duration-factors
+  {:seconds 1000
+   :minutes (* 60 1000)
+   :hours (* 60 60 1000)})
+
+(defn- duration-in-millis [duration]
+  (if (vector? duration)
+    (let [[n unit] duration]
+      (* n (duration-factors unit)))
+    duration))
 
 (defn- nonnull-setter
   ([builder cfg ks handler]
@@ -80,11 +96,27 @@
       (nonnull-setter cfg [:offheap-size] offheap-setter)
       (nonnull-setter cfg [:disk :size] disk-setter)))
 
+(defn- ttl-setter [^CacheConfigurationBuilder builder ttl]
+  (if ttl
+    (->> ttl
+         (duration-in-millis)
+         (Duration/ofMillis)
+         (ExpiryPolicyBuilder/timeToLiveExpiration)
+         (.withExpiry builder))
+    builder))
+
+(def ^{:private true}
+  serializer
+  {:keyword s/jsonista-with-keywords-keys
+   :string s/jsonista-with-string-keys})
+
 (defn- cache-builder [cfg]
-  (CacheConfigurationBuilder/newCacheConfigurationBuilder
-   String
-   (Class/forName "[B")
-   (resource-pools-builder cfg)))
+  (-> (CacheConfigurationBuilder/newCacheConfigurationBuilder
+       String
+       IPersistentMap
+       (resource-pools-builder cfg))
+      (ttl-setter (:ttl cfg))
+      (.withValueSerializer (get serializer (get cfg :keys :string)))))
 
 (def cache-manager-builder
   "Create a 'CacheManagerBuilder for `cfg`."

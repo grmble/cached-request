@@ -34,4 +34,6 @@
                                                 :heap-entries 100
                                                 :offheap-size [512 :MB]
                                                 :disk {:size [5 :GB]
-                                                       :filename "test.cache"}}))))
+                                                       :filename "test.cache"}
+                                                :keys :string
+                                                :ttl [12 :hours]}))))

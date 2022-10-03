@@ -1,10 +1,8 @@
 (ns grmble.cached-request.ehcache
   (:import
-   [java.io ByteArrayInputStream PushbackReader InputStreamReader]
-   [java.nio.charset StandardCharsets]
+   [clojure.lang IPersistentMap]
    [org.ehcache Cache CacheManager])
   (:require
-   [clojure.edn :as edn]
    [grmble.cached-request.config :as config]))
 
 (defn start-cache
@@ -13,36 +11,35 @@
   (let [^CacheManager cache-manager (-> cfg
                                         config/cache-manager-builder
                                         (.build true))
-        cache (.getCache cache-manager (:name cfg) String (Class/forName "[B"))]
+        cache (.getCache cache-manager (:name cfg) String IPersistentMap)]
     {:cache-manager cache-manager
      :cache cache}))
 
 (defn stop-cache [{^CacheManager cache-manager :cache-manager}]
   (.close cache-manager))
 
-(defn put-cache! [{^Cache cache :cache} ^String k ^bytes bs]
-  (.put cache k bs)
-  bs)
+(defn put-cache! [{^Cache cache :cache} ^String k m]
+  (.put cache k m)
+  m)
 
-(defn get-cached ^bytes [{^Cache cache :cache} ^String k]
+(defn get-cached [{^Cache cache :cache} ^String k]
   (.get cache k))
 
-(defn print-bytes [x]
-  (let [s (pr-str x)]
-    (.getBytes s StandardCharsets/UTF_8)))
-
-(defn read-bytes [^bytes bs]
-  (-> bs
-      (ByteArrayInputStream.)
-      (InputStreamReader.)
-      (PushbackReader.)
-      (edn/read)))
 
 (comment
 
-  (let [x (start-cache {:name "test"})]
-    (try
-      (put-cache! x "asdf" (print-bytes {:x 1}))
-      (println "cached"
-               (read-bytes (.get (:cache x) "asdf")))
-      (finally (stop-cache x)))))
+  (def xxx (start-cache {:name "test"
+                         :heap-entries 10
+                         :offheap-size [10 :MB]
+                         :ttl [30 :seconds]}))
+
+  (stop-cache xxx)
+
+
+  (doseq [n (range 20)]
+    (put-cache! xxx (str n) {:n n :s (str n)}))
+
+
+  (time (get-cached xxx "19"))
+
+  (time (get-cached xxx "2")))

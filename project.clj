@@ -4,9 +4,9 @@
   :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"
             :url "https://www.eclipse.org/legal/epl-2.0/"}
   :dependencies [[org.clojure/clojure "1.11.1"]
+                 [clojure-msgpack "1.2.1"]
                  [funcool/promesa "9.0.462"]
                  [metosin/malli "0.8.9"]
-                 [metosin/jsonista "0.3.6"]
                  [org.ehcache/ehcache "3.10.0"
                   ;; leiningen does not want dependencies from http only repos
                   :exclusions [org.glassfish.jaxb/jaxb-runtime]]]

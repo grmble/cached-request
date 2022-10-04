@@ -27,6 +27,12 @@
     (is (= #{:name} (explain-keys {:name ""})))
     (is (= #{:offheap-size} (explain-keys {:name "test" :offheap-size "xxx"})))))
 
+(deftest duration-in-millis
+  (is (= 1 (config/duration-in-millis 1)))
+  (is (= 1000 (config/duration-in-millis [1 :seconds])))
+
+  (is (not (config/duration-in-millis nil))))
+
 
 (deftest cache-manager-builder
   (is (instance? org.ehcache.config.builders.CacheManagerBuilder
@@ -35,5 +41,5 @@
                                                 :offheap-size [512 :MB]
                                                 :disk {:size [5 :GB]
                                                        :filename "test.cache"}
-                                                :keys :string
+                                                :stale-after [15 :minutes]
                                                 :ttl [12 :hours]}))))

@@ -26,8 +26,8 @@
     [:map {:closed true}
      [:size SizeSchema]
      [:filename [:string {:min 1}]]]]
-   [:ttl {:optional true} DurationSchema]
-   [:keys {:optional true} [:enum :keyword :string]]])
+   [:stale-after {:optional true} DurationSchema]
+   [:ttl {:optional true} DurationSchema]])
 
 (defn explain
   "Explain errors for a cache configuration
@@ -60,7 +60,18 @@
    :minutes (* 60 1000)
    :hours (* 60 60 1000)})
 
-(defn- duration-in-millis [duration]
+(defn duration-in-millis
+  "Turn a rich duration into milliseconds.
+   
+   ```clojure
+   (duration-in-millis [10 :seconds])
+   ;; => 10000
+   
+   (duration-in-millis 1)
+   ;; => 1
+   ```
+   "
+  [duration]
   (if (vector? duration)
     (let [[n unit] duration]
       (* n (duration-factors unit)))
@@ -105,18 +116,13 @@
          (.withExpiry builder))
     builder))
 
-(def ^{:private true}
-  serializer
-  {:keyword s/jsonista-with-keywords-keys
-   :string s/jsonista-with-string-keys})
-
 (defn- cache-builder [cfg]
   (-> (CacheConfigurationBuilder/newCacheConfigurationBuilder
        String
        IPersistentMap
        (resource-pools-builder cfg))
       (ttl-setter (:ttl cfg))
-      (.withValueSerializer (get serializer (get cfg :keys :string)))))
+      (.withValueSerializer s/msgpack-serializer)))
 
 (def cache-manager-builder
   "Create a 'CacheManagerBuilder for `cfg`."

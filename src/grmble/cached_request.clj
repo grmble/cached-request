@@ -1,7 +1,8 @@
 (ns grmble.cached-request
   (:require
    [grmble.cached-request.ehcache :as ehcache]
-   [promesa.core :as p]))
+   [promesa.core :as p]
+   [grmble.cached-request.config :as config]))
 
 (def ^{:private true}
   active-requests (atom {}))
@@ -14,12 +15,8 @@
       [d2 true]
       [d2 false])))
 
-(defn- annotate-with-time [result {{keys :keys} :config}]
-  (let [k (if (= keys :keyword)
-            :time
-            "time")
-        v (System/currentTimeMillis)]
-    (assoc result k v)))
+(defn- annotate-with-time [result]
+  (assoc result :time (System/currentTimeMillis)))
 
 (defn- handle-request! [d cache k handler]
   (-> (p/future (let [result (handler k)]
@@ -27,7 +24,7 @@
                           (future? result))
                     @result
                     result)))
-      (p/then #(annotate-with-time % cache))
+      (p/then annotate-with-time)
       (p/then #(ehcache/put-cache! cache k %))
       (p/handle (fn [result error]
                   (if result
@@ -40,6 +37,11 @@
     (when must-handle
       (handle-request! d cache k handler))
     d))
+
+(defn- stale? [{{stale-after :stale-after} :config} {time :time}]
+  ;; stale-after is normalized to milliseconds in ehcache/start-cache
+  (and stale-after
+       (> (- (System/currentTimeMillis) stale-after) time)))
 
 (defn cached-result
   "Retrieve the result from the cache, or perform the request and cache the result.
@@ -60,19 +62,24 @@ when retrieved from the offheap cache.
 "
   [cache k handler]
   (-> (when-let [result (ehcache/get-cached cache k)]
+        (when (stale? cache result)
+          (deferred-handler cache k handler))
         (p/resolved result))
       (or (get @active-requests k))
       (or (deferred-handler cache k handler))))
 
 (defn- slow-result [k]
-  (p/delay 500 {"k" k
-                "str" (str "result for " k)}))
+  (println "running slow-result" k)
+  (p/delay 500 {:status 200
+                :headers {"Content-type" "text/plain"}
+                :body (str "result for " k)}))
 
 (comment
 
   (def xxx (ehcache/start-cache {:name "test"
                                  :heap-entries 10
                                  :offheap-size [10 :MB]
+                                 :stale-after [15 :seconds]
                                  :ttl [1 :hours]}))
 
   (ehcache/stop-cache xxx)

@@ -14,7 +14,7 @@
         cache (.getCache cache-manager (:name cfg) String IPersistentMap)]
     {:cache-manager cache-manager
      :cache cache
-     :config cfg}))
+     :config (update cfg :stale-after config/duration-in-millis)}))
 
 (defn stop-cache [{^CacheManager cache-manager :cache-manager}]
   (.close cache-manager))

@@ -6,6 +6,41 @@
 (def ^{:private true}
   active-requests (atom {}))
 
+(defn- swap-deferred! [k]
+  (let [d (p/deferred)
+        d2 (-> (swap! active-requests #(assoc % k d))
+               (get k))]
+    (if (= d d2)
+      [d2 true]
+      [d2 false])))
+
+(defn- annotate-with-time [result {{keys :keys} :config}]
+  (let [k (if (= keys :keyword)
+            :time
+            "time")
+        v (System/currentTimeMillis)]
+    (assoc result k v)))
+
+(defn- handle-request! [d cache k handler]
+  (-> (p/future (let [result (handler k)]
+                  (if (or (p/promise? result)
+                          (future? result))
+                    @result
+                    result)))
+      (p/then #(annotate-with-time % cache))
+      (p/then #(ehcache/put-cache! cache k %))
+      (p/handle (fn [result error]
+                  (if result
+                    (p/resolve! d result)
+                    (p/reject! d error))
+                  (swap! active-requests #(dissoc % k))))))
+
+(defn- deferred-handler [cache k handler]
+  (let [[d must-handle] (swap-deferred! k)]
+    (when must-handle
+      (handle-request! d cache k handler))
+    d))
+
 (defn cached-result
   "Retrieve the result from the cache, or perform the request and cache the result.
    
@@ -24,23 +59,10 @@ Attention: the result should conform to the chosen value serializer
 when retrieved from the offheap cache.
 "
   [cache k handler]
-  (if-let [{_time :time :as result} (ehcache/get-cached cache k)]
-    (p/resolved result)
-    (let [deferred (p/deferred)
-          future (-> (p/future (let [result (handler k)]
-                                 (if (or (p/promise? result)
-                                         (future? result))
-                                   @result
-                                   result)))
-                     (p/then #(ehcache/put-cache! cache k %)))]
-      (swap! active-requests #(assoc % k deferred))
-      (-> future
-          (p/handle (fn [result error]
-                      (if result
-                        (p/resolve! deferred result)
-                        (p/reject! deferred error))
-                      (swap! active-requests #(dissoc % k)))))
-      deferred)))
+  (-> (when-let [result (ehcache/get-cached cache k)]
+        (p/resolved result))
+      (or (get @active-requests k))
+      (or (deferred-handler cache k handler))))
 
 (defn- slow-result [k]
   (p/delay 500 {"k" k

@@ -6,6 +6,8 @@
   :dependencies [[org.clojure/clojure "1.11.1"]
                  [clojure-msgpack "1.2.1"]
                  [funcool/promesa "9.0.462"]
+                 [io.dropwizard.metrics/metrics-core "4.2.12"]
+                 [io.dropwizard.metrics/metrics-jmx "4.2.12"]
                  [metosin/malli "0.8.9"]
                  [org.ehcache/ehcache "3.10.0"
                   ;; leiningen does not want dependencies from http only repos

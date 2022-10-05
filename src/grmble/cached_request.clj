@@ -1,8 +1,8 @@
 (ns grmble.cached-request
   (:require
    [grmble.cached-request.ehcache :as ehcache]
-   [promesa.core :as p]
-   [grmble.cached-request.config :as config]))
+   [grmble.cached-request.metrics :as metrics]
+   [promesa.core :as p]))
 
 (def ^{:private true}
   active-requests (atom {}))
@@ -19,18 +19,20 @@
   (assoc result :time (System/currentTimeMillis)))
 
 (defn- handle-request! [d cache k handler]
-  (-> (p/future (let [result (handler k)]
-                  (if (or (p/promise? result)
-                          (future? result))
-                    @result
-                    result)))
-      (p/then annotate-with-time)
-      (p/then #(ehcache/put-cache! cache k %))
-      (p/handle (fn [result error]
-                  (if result
-                    (p/resolve! d result)
-                    (p/reject! d error))
-                  (swap! active-requests #(dissoc % k))))))
+  (let [ctx (.time metrics/uncached-timer)]
+    (-> (p/future (let [result (handler k)]
+                    (if (or (p/promise? result)
+                            (future? result))
+                      @result
+                      result)))
+        (p/then annotate-with-time)
+        (p/then #(ehcache/put-cache! cache k %))
+        (p/handle (fn [result error]
+                    (if result
+                      (p/resolve! d result)
+                      (p/reject! d error))
+                    (.stop ctx)
+                    (swap! active-requests #(dissoc % k)))))))
 
 (defn- deferred-handler [cache k handler]
   (let [[d must-handle] (swap-deferred! k)]
@@ -38,10 +40,10 @@
       (handle-request! d cache k handler))
     d))
 
-(defn- stale? [{{stale-after :stale-after} :config} {time :time}]
+(defn- stale? [{stale-after :stale-after} {time :time}]
   ;; stale-after is normalized to milliseconds in ehcache/start-cache
   (and stale-after
-       (> (- (System/currentTimeMillis) stale-after) time)))
+       (> (unchecked-subtract (System/currentTimeMillis) stale-after) time)))
 
 (defn cached-result
   "Retrieve the result from the cache, or perform the request and cache the result.
@@ -61,7 +63,8 @@ Attention: the result should conform to the chosen value serializer
 when retrieved from the offheap cache.
 "
   [cache k handler]
-  (-> (when-let [result (ehcache/get-cached cache k)]
+  (-> (when-let [result (metrics/with-timer metrics/cached-timer
+                          (ehcache/get-cached cache k))]
         (when (stale? cache result)
           (deferred-handler cache k handler))
         (p/resolved result))
@@ -81,6 +84,8 @@ when retrieved from the offheap cache.
                                  :offheap-size [10 :MB]
                                  :stale-after [15 :seconds]
                                  :ttl [1 :hours]}))
+
+  (-> (:cache xxx) (bean))
 
   (ehcache/stop-cache xxx)
 

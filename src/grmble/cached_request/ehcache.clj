@@ -1,20 +1,25 @@
 (ns grmble.cached-request.ehcache
   (:import
    [clojure.lang IPersistentMap]
-   [org.ehcache Cache CacheManager])
+   [org.ehcache Cache CacheManager]
+   [org.ehcache.config.builders CacheManagerBuilder])
   (:require
    [grmble.cached-request.config :as config]))
+
+(defrecord CacheMap
+           [^CacheManager cache-manager
+            ^Cache cache
+            ^Long stale-after])
+
 
 (defn start-cache
   "Creates a 'CacheManager' and 'Cache' from `cfg`."
   [cfg]
-  (let [^CacheManager cache-manager (-> cfg
-                                        config/cache-manager-builder
-                                        (.build true))
-        cache (.getCache cache-manager (:name cfg) String IPersistentMap)]
-    {:cache-manager cache-manager
-     :cache cache
-     :config (update cfg :stale-after config/duration-in-millis)}))
+  (let [^CacheManagerBuilder builder (config/cache-manager-builder cfg)
+        ^CacheManager cache-manager (.build builder true)
+        cache (.getCache cache-manager (:name cfg) String IPersistentMap)
+        stale-after (config/duration-in-millis (:stale-after cfg))]
+    (->CacheMap cache-manager cache stale-after)))
 
 (defn stop-cache [{^CacheManager cache-manager :cache-manager}]
   (.close cache-manager))
@@ -28,6 +33,8 @@
 
 
 (comment
+
+  (set! *warn-on-reflection* true)
 
   (def xxx (start-cache {:name "test"
                          :heap-entries 10

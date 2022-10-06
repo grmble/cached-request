@@ -9,7 +9,8 @@
 (def ^{:doc "Serializes clojure values via msg pack.
              
 Off-heap or on disk the cached response will be stored
-in the format delivered by this serializer."}
+in the format delivered by this serializer."
+       :tag Serializer}
   msgpack-serializer
   (reify Serializer
     (serialize [_ obj]

@@ -77,52 +77,24 @@
       (* n (duration-factors unit)))
     duration))
 
-(defn- nonnull-setter
-  ([builder cfg ks handler]
-   (nonnull-setter builder cfg ks handler 0))
 
-  ([builder cfg ks handler default-size]
-   (let [size (size-in-bytes (get-in cfg ks default-size))]
-     (if (> size 0)
-       (handler builder size)
-       builder))))
+(defn- resource-pools-builder ^ResourcePoolsBuilder [cfg]
+  (cond-> (ResourcePoolsBuilder/newResourcePoolsBuilder)
+    true (.heap (cfg :heap-entries 10) EntryUnit/ENTRIES)
+    (cfg :offheap-size) (.offheap (size-in-bytes (cfg :offheap-size)) MemoryUnit/B)
+    (-> cfg :disk :size) (.disk (size-in-bytes (-> cfg :disk :size)) MemoryUnit/B true)))
 
-(defn- heap-setter [^ResourcePoolsBuilder rpb size]
-  (.heap rpb size EntryUnit/ENTRIES))
 
-(defn- offheap-setter [^ResourcePoolsBuilder rpb size]
-  (.offheap rpb size MemoryUnit/B))
-
-(defn- disk-setter [^ResourcePoolsBuilder rpb size]
-  (.disk rpb size MemoryUnit/B true))
-
-(defn- persistence-setter [{{filename :filename} :disk}]
-  (fn [^CacheManagerBuilder builder _]
-    (.with builder (CacheManagerBuilder/persistence
-                    (java.io.File. filename)))))
-
-(defn- resource-pools-builder [cfg]
-  (-> (ResourcePoolsBuilder/newResourcePoolsBuilder)
-      (nonnull-setter cfg [:heap-entries] heap-setter 10)
-      (nonnull-setter cfg [:offheap-size] offheap-setter)
-      (nonnull-setter cfg [:disk :size] disk-setter)))
-
-(defn- ttl-setter [^CacheConfigurationBuilder builder ttl]
-  (if ttl
-    (->> ttl
-         (duration-in-millis)
-         (Duration/ofMillis)
-         (ExpiryPolicyBuilder/timeToLiveExpiration)
-         (.withExpiry builder))
-    builder))
-
-(defn- cache-builder [cfg]
-  (-> (CacheConfigurationBuilder/newCacheConfigurationBuilder
-       String
-       IPersistentMap
-       (resource-pools-builder cfg))
-      (ttl-setter (:ttl cfg))
-      (.withValueSerializer s/msgpack-serializer)))
+(defn- cache-builder ^CacheConfigurationBuilder [cfg]
+  (cond-> (CacheConfigurationBuilder/newCacheConfigurationBuilder
+           String
+           IPersistentMap
+           (resource-pools-builder cfg))
+    (cfg :ttl) (.withExpiry (-> (cfg :ttl)
+                                (duration-in-millis)
+                                (Duration/ofMillis)
+                                (ExpiryPolicyBuilder/timeToLiveExpiration)))
+    true (.withValueSerializer s/msgpack-serializer)))
 
 (def cache-manager-builder
   "Create a 'CacheManagerBuilder for `cfg`."
@@ -130,7 +102,6 @@
    {:schema [:=> [:cat CacheConfigSchema] any?]}
 
    (fn [cfg]
-     (-> (CacheManagerBuilder/newCacheManagerBuilder)
-         (nonnull-setter cfg [:disk :size] (persistence-setter cfg))
-         (.withCache (:name cfg) (cache-builder cfg))))))
-
+     (cond-> (CacheManagerBuilder/newCacheManagerBuilder)
+       (-> cfg :disk :size) (.with (CacheManagerBuilder/persistence (java.io.File. ^String (get-in cfg [:disk :filename]))))
+       true (.withCache ^String (cfg :name) (cache-builder cfg))))))

@@ -12,4 +12,5 @@
                  [org.ehcache/ehcache "3.10.0"
                   ;; leiningen does not want dependencies from http only repos
                   :exclusions [org.glassfish.jaxb/jaxb-runtime]]]
+  :global-vars {*warn-on-reflection* true}
   :repl-options {:init-ns grmble.cached-request})

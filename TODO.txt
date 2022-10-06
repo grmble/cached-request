@@ -1,8 +1,0 @@
-async http as dev dependency for testing
-instrument code
-
-x (A) only one promise for a given key
-x result is enriched with time of aquisition
-x stale results are served and refreshed in the background (if behaviour is unwanted, only configure ttl)
-x starting cache also returns config along with cache manager
-x use msgpack instead of jsonista

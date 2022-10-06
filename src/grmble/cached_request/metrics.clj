@@ -11,7 +11,17 @@
   `(apply str ~*ns* "."
           (interpose "." [~@names])))
 
-(defmacro with-timer [timer & body]
+(defmacro with-timer
+  "Times the execution of `body` using `timer`.
+   
+   ```clojure
+   (with-timer example-timer (println :foo))
+   ```
+   
+   Note that calling `.stop` on the context is not compulsory,
+   so it is possible to start multiple contexts without stopping them.
+   "
+  [timer & body]
   `(let [^Timer timer# ~timer
          ctx# (.time timer#)]
      (try
@@ -30,15 +40,3 @@
   (.. (JmxReporter/forRegistry registry)
       (build)
       (start)))
-
-(defonce ^Timer uncached-timer (.timer registry (metric-name "uncached")))
-(defonce ^Timer cached-timer (.timer registry (metric-name "cached")))
-
-
-
-(comment
-  (set! *warn-on-reflection* true)
-
-  (jmx-reporter)
-
-  (with-timer test-timer (println "asdf")))

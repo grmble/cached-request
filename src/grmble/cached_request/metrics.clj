@@ -30,13 +30,13 @@
          (.stop ctx#)))))
 
 (defn console-reporter []
-  (.. (ConsoleReporter/forRegistry registry)
-      (convertRatesTo TimeUnit/SECONDS)
-      (convertDurationsTo TimeUnit/MILLISECONDS)
-      (build)
-      (start 1 TimeUnit/MINUTES)))
+  (doto (.. (ConsoleReporter/forRegistry registry)
+            (convertRatesTo TimeUnit/SECONDS)
+            (convertDurationsTo TimeUnit/MILLISECONDS)
+            (build))
+    (.start 1 TimeUnit/MINUTES)))
 
 (defn jmx-reporter []
-  (.. (JmxReporter/forRegistry registry)
-      (build)
-      (start)))
+  (doto (.. (JmxReporter/forRegistry registry)
+            (build))
+    (.start)))

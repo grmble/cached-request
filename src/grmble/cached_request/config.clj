@@ -99,7 +99,7 @@
 (def cache-manager-builder
   "Create a 'CacheManagerBuilder for `cfg`."
   (m/-instrument
-   {:schema [:=> [:cat CacheConfigSchema] any?]}
+   {:schema [:=> [:cat CacheConfigSchema] :any]}
 
    (fn [cfg]
      (cond-> (CacheManagerBuilder/newCacheManagerBuilder)

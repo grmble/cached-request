@@ -1,10 +1,46 @@
 (ns grmble.cached-request
   (:import
-   [com.codahale.metrics Meter Timer])
+   [com.codahale.metrics Meter Timer]
+   [clojure.lang IPersistentMap]
+   [org.ehcache Cache CacheManager]
+   [org.ehcache.config.builders CacheManagerBuilder])
   (:require
-   [grmble.cached-request.ehcache :as ehcache]
+   [grmble.cached-request.config :as config]
    [grmble.cached-request.metrics :as metrics]
    [promesa.core :as p]))
+
+(defrecord CacheMap
+           [^CacheManager cache-manager
+            ^Cache cache
+            ^Long stale-after])
+
+
+(defn start-cache
+  "Creates a 'CacheManager' and 'Cache' from `cfg`."
+  [cfg]
+  (let [^CacheManagerBuilder builder (config/cache-manager-builder cfg)
+        ^CacheManager cache-manager (.build builder true)
+        cache (.getCache cache-manager (:name cfg) String IPersistentMap)
+        stale-after (config/duration-in-millis (:stale-after cfg))]
+    (->CacheMap cache-manager cache stale-after)))
+
+(defn stop-cache
+  "Stops a cache created by 'start-cache'."
+  [{^CacheManager cache-manager :cache-manager}]
+  (.close cache-manager))
+
+(defn put-cache!
+  "Put a value `m` (usually a map) in the `cache` under the key `k`."
+  [{^Cache cache :cache} ^String k m]
+  (.put cache k m)
+  m)
+
+(defn get-cached
+  "Get the cached value from `cache` under the key  `k`.
+   
+   Returns `nil` if there is no entry in the cache."
+  [{^Cache cache :cache} ^String k]
+  (.get cache k))
 
 (def ^{:private true}
   active-requests (atom {}))
@@ -27,7 +63,7 @@
                     @result
                     result)))
       (p/then annotate-with-time)
-      (p/then #(ehcache/put-cache! cache k %))
+      (p/then #(put-cache! cache k %))
       (p/handle (fn [result error]
                   (if result
                     (p/resolve! d result)
@@ -69,7 +105,7 @@ when retrieved from the offheap cache.
 "
   [cache k handler]
   (let [ctx (.time timer-total-request)
-        cached  (when-let [result (ehcache/get-cached cache k)]
+        cached  (when-let [result (get-cached cache k)]
                   (.mark meter-cache-hit)
                   (when (stale? cache result)
                     (deferred-handler cache k handler))
@@ -79,25 +115,3 @@ when retrieved from the offheap cache.
         (or (get @active-requests k))
         (or (deferred-handler cache k handler))
         (p/finally (fn [_ _] (.stop ctx))))))
-
-(defn- slow-result [k]
-  (println "running slow-result" k)
-  (p/delay 500 {:status 200
-                :headers {"Content-type" "text/plain"}
-                :body (str "result for " k)}))
-
-(comment
-
-  (def xxx (ehcache/start-cache {:name "test"
-                                 :heap-entries 10
-                                 :offheap-size [10 :MB]
-                                 :stale-after [15 :seconds]
-                                 :ttl [1 :hours]}))
-
-  (ehcache/stop-cache xxx)
-
-  (time @(slow-result "asdf"))
-
-  (metrics/jmx-reporter)
-
-  (time @(cached-result xxx "xxx" slow-result)))

@@ -20,11 +20,9 @@
       (is reporter)
       (.stop reporter)))
 
-  (comment
-    (testing "timed-promise will time promises"
-      (is (= 1
-             @(metrics/timed-promise test-timer 1)))
-      (is (= 3
-             @(metrics/timed-promise test-timer (p/future (+ 1 2)))))
-
-      (is (p/rejected? (metrics/timed-promise test-timer (ex-info "oh oh" {})))))))
+  (testing "timed-promise will handle expressions, promises and exceptions"
+    (is (= 1
+           @(metrics/timed-promise test-timer 1)))
+    (is (= 3
+           @(metrics/timed-promise test-timer (p/future (+ 1 2)))))
+    (is (p/rejected? (metrics/timed-promise test-timer (throw (ex-info "oh oh" {})))))))

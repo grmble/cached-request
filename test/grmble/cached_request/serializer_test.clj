@@ -10,7 +10,7 @@
                ;; byte arrays can be read and written
                ;; but they have pointer comparison it seems
                ]]
-    (let [obj2 (->> obj
-                    (.serialize s/msgpack-serializer)
-                    (.read s/msgpack-serializer))]
+    (let [ser (.serialize s/msgpack-serializer obj)
+          obj2 (.read s/msgpack-serializer ser)]
+      (is (.equals s/msgpack-serializer obj ser))
       (is (= obj obj2)))))

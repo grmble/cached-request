@@ -57,9 +57,7 @@
   (assoc result :time (System/currentTimeMillis)))
 
 (defn- handle-request! [d cache k handler]
-  (-> (try (handler k)
-           (catch Throwable t
-             (p/rejected t)))
+  (-> (p/do! (handler k))
       (p/then annotate-with-time)
       (p/then #(put-cache! cache k %))
       (p/handle (fn [result error]
@@ -107,13 +105,13 @@ really buy anything - blocking code will blow up the default executor,
 and well behaved code is punished by the extra future execution.
 "
   [cache k handler]
-  (let [ctx (.time timer-total-request)]
-    (-> (when-let [result (get-cached cache k)]
-          (.mark meter-cache-hit)
-          (when (stale? cache result)
-            (deferred-handler cache k handler))
-          (p/resolved result))
-        (or (.mark meter-cache-miss))
-        (or (get @active-requests k))
-        (or (deferred-handler cache k handler))
-        (p/finally (fn [_ _] (.stop ctx))))))
+  (metrics/timed-promise
+   timer-total-request
+   (-> (when-let [result (get-cached cache k)]
+         (.mark meter-cache-hit)
+         (when (stale? cache result)
+           (deferred-handler cache k handler))
+         (p/resolved result))
+       (or (.mark meter-cache-miss))
+       (or (get @active-requests k))
+       (or (deferred-handler cache k handler)))))

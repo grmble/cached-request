@@ -13,6 +13,7 @@
   `(apply str ~*ns* "."
           (interpose "." [~@names])))
 
+
 (defmacro timed-promise
   "Times the execution of `body` using `timer`.
 
@@ -22,11 +23,12 @@
    If you don't want a promise as result, just use `with-open` -
    `.close` is an alias to `.stop`.
    "
-  [timer expr]
+  [timer & body]
   `(let [^Timer timer# ~timer
          ctx# (.time timer#)]
-     (p/finally (p/do! ~expr)
-                (fn [_ _] (.stop ctx#)))))
+     (p/finally (p/do! ~@body)
+                (constantly (.stop ctx#)))))
+
 
 (defn console-reporter
   "Create (and start) a console reporter.

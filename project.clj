@@ -5,12 +5,14 @@
             :url "https://www.eclipse.org/legal/epl-2.0/"}
   :dependencies [[org.clojure/clojure "1.11.1"]
                  [clojure-msgpack "1.2.1"]
-                 [funcool/promesa "9.0.462"]
+                 [funcool/promesa "9.0.470"]
                  [io.dropwizard.metrics/metrics-core "4.2.12"]
                  [io.dropwizard.metrics/metrics-jmx "4.2.12"]
                  [metosin/malli "0.8.9"]
-                 [org.ehcache/ehcache "3.10.0"
+                 [org.ehcache/ehcache "3.10.2"
                   ;; leiningen does not want dependencies from http only repos
                   :exclusions [org.glassfish.jaxb/jaxb-runtime]]]
+  :plugins [[lein-ancient "1.0.0-RC3"]
+            [lein-cloverage "1.2.2"]]
   :global-vars {*warn-on-reflection* true}
   :repl-options {:init-ns grmble.cached-request})

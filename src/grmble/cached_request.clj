@@ -57,11 +57,9 @@
   (assoc result :time (System/currentTimeMillis)))
 
 (defn- handle-request! [d cache k handler]
-  (-> (p/future (let [result (handler k)]
-                  (if (or (p/promise? result)
-                          (future? result))
-                    @result
-                    result)))
+  (-> (try (handler k)
+           (catch Throwable t
+             (p/rejected t)))
       (p/then annotate-with-time)
       (p/then #(put-cache! cache k %))
       (p/handle (fn [result error]
@@ -102,15 +100,19 @@ i.e. the slow operation is executed only once.
 Attention: the result should conform to the chosen value serializer
 (default: jsonista with string keys) or it may change form
 when retrieved from the offheap cache.
+   
+The handler should NOT block - it should return immediately or return
+a promise.  I used to wrap this in a future, but this does not
+really buy anything - blocking code will blow up the default executor,
+and well behaved code is punished by the extra future execution.
 "
   [cache k handler]
-  (let [ctx (.time timer-total-request)
-        cached  (when-let [result (get-cached cache k)]
-                  (.mark meter-cache-hit)
-                  (when (stale? cache result)
-                    (deferred-handler cache k handler))
-                  (p/resolved result))]
-    (-> cached
+  (let [ctx (.time timer-total-request)]
+    (-> (when-let [result (get-cached cache k)]
+          (.mark meter-cache-hit)
+          (when (stale? cache result)
+            (deferred-handler cache k handler))
+          (p/resolved result))
         (or (.mark meter-cache-miss))
         (or (get @active-requests k))
         (or (deferred-handler cache k handler))

@@ -1,7 +1,7 @@
 (ns grmble.cached-request-test
   (:require [clojure.test :refer [deftest testing is]]
             [grmble.cached-request :as cr]
-            [promesa.core :as p]))
+            [grmble.cached-request.metrics :as metrics]))
 
 (defn test-response [opts k]
   (some-> k
@@ -35,7 +35,7 @@
           (let [now (System/currentTimeMillis)
                 result @(cr/cached-result cache k (partial test-response {}))]
             (is (result :time))
-            (is (> now (result :time)))
+            (is (>= now (result :time)))
             (is (= (dissoc result :time)
                    (test-response {} k))))))
 
@@ -50,3 +50,9 @@
 
       (finally (cr/stop-cache cache)))))
 
+
+(comment
+
+  (def xxx (metrics/console-reporter))
+
+  xxx)
